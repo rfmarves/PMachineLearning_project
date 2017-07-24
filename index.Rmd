@@ -56,6 +56,8 @@ validation <- full.training[-record.split, ]
 
 There are several prediction algorithms used, but foor brevetiy's sake, we'll just present the one that worked best: Random Forests.
 
+The algorithm is constructed using therandomForest package, which breaks down the training data into branches randomly and creates a tree that becomes the prediction model.
+
 ```{r Random Forests}
 control <- trainControl(method = "cv", number = 5)
 pmodel <- train(classe ~ ., data = training, method = "rf", 
@@ -65,8 +67,14 @@ print(pmodel, digits = 4)
 predict.rf <- predict(pmodel, validation)
 # Show prediction result
 (conf.rf <- confusionMatrix(validation$classe, predict.rf))
+```
+
+The model accuracy is:
+```{r Random Forests accuracy}
 (accuracy.rf <- conf.rf$overall[1])
 ```
+
+and the expected out of sample error is  100% - `r round(accuracy.rf*100,1)`% = `r 100 - round(accuracy.rf*100,1)`%, which has been cross-validated with the validation subset of training set.
 
 ## Predicting the Test Set
 
