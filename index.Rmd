@@ -1,0 +1,113 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "René Marves"
+date: "July 21, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Setup
+Loading the required libraries.
+
+```{r Setup, message=FALSE, warning=FALSE}
+library(caret); library(rattle); library(rpart); library(rpart.plot)
+library(randomForest); library(repmis); library(gbm)
+```
+
+Now we load the data.
+
+```{r Load data}
+full.training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+
+## Preparation
+
+Now, we clean the data and prepare for creating the predictive model.  The first 7 columns of data are not actually relevant to the predictions, so they are removed first.  Then, the variables with near-zero variance, which don't provide as valuable information for the prediction and then the variables with NAs, which would generate errors in the prediction models.
+
+```{r Clean-up}
+# Remove first 7 predictors
+full.training <- full.training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+
+# Removes near zero variance variables
+full.training <- full.training[, -nearZeroVar(full.training)]
+testing <- testing[, -nearZeroVar(testing)]
+
+# Removes variables with NAs
+full.training <- full.training[, colSums(is.na(full.training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+
+After that, the data is split into training and validation subsets to create the model.
+
+```{r Split data}
+# Splits the data set into training and validation
+set.seed(4321)
+record.split <- createDataPartition(full.training$classe, p = 0.7, list = FALSE)
+training <- full.training[record.split, ]
+validation <- full.training[-record.split, ]
+```
+
+## Prediction Algorithm
+
+There are several prediction algorithms used, but foor brevetiy's sake, we'll just present the one that worked best: Random Forests.
+
+The algorithm is constructed using therandomForest package, which breaks down the training data into branches randomly and creates a tree that becomes the prediction model.
+
+```{r Random Forests}
+control <- trainControl(method = "cv", number = 5)
+pmodel <- train(classe ~ ., data = training, method = "rf", 
+                   trControl = control)
+print(pmodel, digits = 4)
+# predict outcomes using validation set
+predict.rf <- predict(pmodel, validation)
+# Show prediction result
+(conf.rf <- confusionMatrix(validation$classe, predict.rf))
+```
+
+The model accuracy is:
+```{r Random Forests accuracy}
+(accuracy.rf <- conf.rf$overall[1])
+```
+
+and the expected out of sample error is  100% - `r round(accuracy.rf*100,1)`% = `r 100 - round(accuracy.rf*100,1)`%, which has been cross-validated with the validation subset of training set.
+
+## Predicting the Test Set
+
+Now, we use the model to predict the test results:
+```{r Test Prediction}
+(predict(pmodel, testing))
+```
+
+## Appendix: Other prediction models
+
+Here are the other prediction models that were created and not used, as they provided less accuracy than the one used.
+
+### Classification trees
+```{r Classificatoin trees}
+control <- trainControl(method = "cv", number = 5)
+tree.model <- train(classe ~ ., data = training, method = "rpart", 
+                   trControl = control)
+print(tree.model, digits = 4)
+fancyRpartPlot(tree.model$finalModel)
+# Test prediction using validation set
+tree.predict <- predict(tree.model, validation)
+# Show result
+(tree.conf <- confusionMatrix(validation$classe, tree.predict))
+(accuracy.tree <- tree.conf$overall[1])
+```
+
+### Generalized Boosted Regression
+```{r GBR}
+gbr.control <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+gbm.fit <- train(classe ~ ., data=training, method = "gbm",
+                 trControl = gbr.control, verbose = FALSE)
+gbm.model <- gbm.fit$finalModel
+gbm.validation <- predict(gbm.fit, newdata=validation)
+(gbm.accuracy <- confusionMatrix(gbm.validation, validation$classe))
+```
+
